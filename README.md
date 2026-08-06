@@ -8,7 +8,7 @@ no real server in the loop.
 
 ```bash
 uv sync                       # add --extra protobuf / --extra compression as needed
-uv run main.py                # http://0.0.0.0:8001
+uv run main.py                # http://0.0.0.0:8081
 uv run main.py --port 4318
 ```
 
@@ -70,7 +70,7 @@ huge and often sensitive. The full body is still written to disk.
 
 | Flag | Default | Purpose |
 |---|---|---|
-| `--host` / `--port` | `0.0.0.0` / `8001` | bind address |
+| `--host` / `--port` | `0.0.0.0` / `8081` | bind address |
 | `--log-dir` | `logs` | where sessions are written |
 | `--status N` | — | force a status on every response (retry testing) |
 | `--delay S` | `0` | stall S seconds before responding (timeout testing) |

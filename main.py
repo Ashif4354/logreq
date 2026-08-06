@@ -12,7 +12,7 @@ Handles:
   * chaos knobs (--status, --delay) to exercise client retry paths
 
 Run:
-    uv run main.py                        # http://0.0.0.0:8001
+    uv run main.py                        # http://0.0.0.0:8081
     uv run main.py --port 4318
     uv run main.py --status 503 --delay 2 # make the client sweat
 """
@@ -445,7 +445,7 @@ def start_session(config: Config) -> None:
 def main() -> None:
     parser = argparse.ArgumentParser(description="fake backend that logs every request")
     parser.add_argument("--host", default="0.0.0.0")
-    parser.add_argument("--port", type=int, default=8001)
+    parser.add_argument("--port", type=int, default=8081)
     parser.add_argument("--log-dir", default="logs", type=Path)
     parser.add_argument("--status", type=int, help="force this status on every response")
     parser.add_argument("--delay", type=float, default=0.0, help="seconds to stall")
