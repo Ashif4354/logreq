@@ -1,0 +1,16 @@
+[project]
+name = "logreq"
+version = "0.1.0"
+description = "Request Logger"
+readme = "README.md"
+requires-python = ">=3.14"
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn>=0.32",
+]
+
+[project.optional-dependencies]
+# decode protobuf bodies into readable JSON instead of base64
+protobuf = ["opentelemetry-proto>=1.28", "protobuf>=5.28"]
+# content-encodings some clients and proxies use beyond gzip/deflate
+compression = ["brotli>=1.1", "zstandard>=0.23"]
