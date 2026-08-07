@@ -54,17 +54,17 @@ jq '.body' logs/latest/00001_*.json
 
 ## Live console
 
-Every request prints one line as it lands. Trace payloads additionally print a short
-summary — service, span names, and which attribute conventions the client is using:
+One line per request, nothing else:
 
 ```
 #00001 POST /v1/traces <- 127.0.0.1:52730 131B protobuf->json -> 200
-  resource service.name=checkout-api
-    span 'ChatCompletion' kind=3 trace=abc123def4567890 llm.model_name=some-model
+#00002 GET  /health    <- 127.0.0.1:57696 0B   empty          -> 200
 ```
 
-Prompt, completion, input and output attributes are kept off the console — they're
-huge and often sensitive. The full body is still written to disk.
+Bodies stay on disk. Pass `--summary` if you also want trace payloads unpacked into
+the console — service, span names, and which attribute conventions the client is
+using. Prompt, completion, input and output attributes are omitted from that view;
+they're huge and often sensitive.
 
 ## Flags
 
@@ -75,7 +75,7 @@ huge and often sensitive. The full body is still written to disk.
 | `--status N` | — | force a status on every response (retry testing) |
 | `--delay S` | `0` | stall S seconds before responding (timeout testing) |
 | `--max-body N` | unlimited | truncate text bodies to N chars |
-| `--no-summary` | off | disable the trace summaries |
+| `--summary` | off | also print a per-span summary of trace payloads |
 
 ## Notes
 

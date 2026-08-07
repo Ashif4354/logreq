@@ -87,7 +87,7 @@ class Config:
     log_dir: Path = Path("logs")
     status: int | None = None
     delay: float = 0.0
-    summarize: bool = True
+    summarize: bool = False
     max_body: int = 0  # 0 = unlimited
 
 
@@ -449,7 +449,9 @@ def main() -> None:
     parser.add_argument("--log-dir", default="logs", type=Path)
     parser.add_argument("--status", type=int, help="force this status on every response")
     parser.add_argument("--delay", type=float, default=0.0, help="seconds to stall")
-    parser.add_argument("--no-summary", action="store_true", help="skip trace summaries")
+    parser.add_argument(
+        "--summary", action="store_true", help="also print a per-span trace summary"
+    )
     parser.add_argument("--max-body", type=int, default=0, help="truncate text bodies")
     args = parser.parse_args()
 
@@ -458,7 +460,7 @@ def main() -> None:
             log_dir=args.log_dir,
             status=args.status,
             delay=args.delay,
-            summarize=not args.no_summary,
+            summarize=args.summary,
             max_body=args.max_body,
         )
     )
