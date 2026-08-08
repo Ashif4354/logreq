@@ -14,3 +14,19 @@ services:
     volumes:
       - ./logs:/logs
     restart: unless-stopped
+
+  logreq-go:
+    build:
+      context: ./src/go
+      dockerfile: Dockerfile.go
+    container_name: logreq-go
+    ports:
+      - "8082:8081"
+    environment:
+      - PROXY_TARGET=${PROXY_TARGET:-}
+    env_file:
+      - path: ./src/go/.env
+        required: false
+    volumes:
+      - ./logs:/logs
+    restart: unless-stopped

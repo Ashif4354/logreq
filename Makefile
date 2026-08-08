@@ -1,22 +1,33 @@
-.PHONY: help run-python build-python up down logs clean
+.PHONY: help run-python run-go build-python build-go build-all up down logs clean
 
 # Default target
 help:
 	@echo "Available commands:"
-	@echo "  make run-python     Run logreq Python service locally"
+	@echo "  make run-python     Run logreq Python implementation locally"
+	@echo "  make run-go         Run logreq Go implementation locally"
 	@echo "  make build-python   Build logreq Python Docker image"
-	@echo "  make up             Start logreq with Docker Compose"
+	@echo "  make build-go       Build logreq Go Docker image"
+	@echo "  make build-all      Build all language Docker images"
+	@echo "  make up             Start all services with Docker Compose"
 	@echo "  make down           Stop Docker Compose containers"
 	@echo "  make logs           View Docker Compose logs"
-	@echo "  make clean          Clean python cache and temporary test logs"
+	@echo "  make clean          Clean python cache and temporary test files"
 
-# Run Python service locally
+# Local execution
 run-python:
 	cd src/python && uv run main.py
 
-# Build Python Docker image
+run-go:
+	cd src/go && go run main.go
+
+# Docker build targets
 build-python:
 	docker build -f src/python/Dockerfile.python -t logreq-python:latest src/python
+
+build-go:
+	docker build -f src/go/Dockerfile.go -t logreq-go:latest src/go
+
+build-all: build-python build-go
 
 # Docker Compose targets
 up:

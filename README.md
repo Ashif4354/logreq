@@ -4,13 +4,49 @@ A fake backend that logs every incoming HTTP request to disk. Point any client a
 and read back exactly what it sent — method, path, headers, and a decoded body — with
 no real server in the loop.
 
-## Run
+## Architecture & Languages
+
+`logreq` is designed to be multi-language extensible under `src/<language>`. All implementations write session logs into the central root `logs/` directory with language-tagged folder names (`YYYY-MM-DD_HH-MM-SS-<lang>`).
+
+```
+logreq/
+├── logs/                         # Shared root log directory
+│   ├── 2026-08-08_17-42-06-python/
+│   └── 2026-08-08_17-49-33-go/
+├── src/
+│   ├── python/                   # Python implementation (FastAPI / Uvicorn)
+│   │   ├── Dockerfile.python
+│   │   ├── main.py
+│   │   └── pyproject.toml
+│   └── go/                       # Go implementation (net/http stdlib)
+│       ├── Dockerfile.go
+│       ├── main.go
+│       └── go.mod
+├── docker-compose.yml            # Multi-service docker orchestration
+├── Makefile                      # Unified developer CLI
+└── README.md
+```
+
+## Quick Start
+
+### Go Implementation
 
 ```bash
-cd src/python
-uv sync                       # add --extra protobuf / --extra compression as needed
-uv run main.py                # http://0.0.0.0:8081
-uv run main.py --port 4318
+# Run locally using Go
+cd src/go && go run main.go
+
+# Or via Makefile from root
+make run-go
+```
+
+### Python Implementation
+
+```bash
+# Run locally using Python / uv
+cd src/python && uv run main.py
+
+# Or via Makefile from root
+make run-python
 ```
 
 ## What it handles
@@ -25,41 +61,18 @@ uv run main.py --port 4318
 Nothing is ever dropped. A body that can't be parsed is stored as base64 plus a hex
 preview, and any decode failure is recorded on the request instead of raising.
 
-### Protobuf bodies
-
-Requests posted to `/v1/traces`, `/v1/metrics` or `/v1/logs` are decoded into readable
-JSON when the optional schema package is installed (`uv sync --extra protobuf`), with
-binary id fields rewritten from base64 to hex. Those three paths also get a
-protocol-correct empty success response, so clients that would otherwise treat a
-mismatched reply as a failure and retry don't hammer you. Everything else is echoed.
-
-## Output
+## Output Structure
 
 ```
 logs/
-  2026-08-08_17-42-06-python/
+  2026-08-08_17-49-33-go/
     index.jsonl                    # one line per request, greppable
     00001_POST_v1_traces.json      # full record, sequence-ordered
     00002_GET_health.json
+  2026-08-08_17-42-06-python/
+    index.jsonl
+    00001_POST_v1_traces.json
 ```
-
-Each record holds the timestamp, method, full URL, client address, headers, query
-params, decoded body, byte counts, detected body format, any decode error, and the
-status that was returned.
-
-## Live console
-
-One line per request, nothing else:
-
-```
-#00001 POST /v1/traces <- 127.0.0.1:52730 131B protobuf->json -> 200
-#00002 GET  /health    <- 127.0.0.1:57696 0B   empty          -> 200
-```
-
-Bodies stay on disk. Pass `--summary` if you also want trace payloads unpacked into
-the console — service, span names, and which attribute conventions the client is
-using. Prompt, completion, input and output attributes are omitted from that view;
-they're huge and often sensitive.
 
 ## Proxy Mode
 
@@ -67,66 +80,36 @@ they're huge and often sensitive.
 1. **Mock Mode (Default)**: Logs incoming requests and returns protocol-correct mock responses.
 2. **Proxy Mode**: Forwards incoming requests to a target server, logs both request and response details, and returns the target's exact response back to the client.
 
-To enable **Proxy Mode**, set `PROXY_TARGET` in `.env` or as an environment variable, or pass `--proxy-target`:
+To enable **Proxy Mode**, set `PROXY_TARGET` in `.env` or as an environment variable, or pass `--proxy-target` / `-proxy-target`:
 
 ```bash
-# Via .env file:
-# Set PROXY_TARGET=http://localhost:8091 in src/python/.env
-cd src/python && uv run main.py
-
-# Via environment variable:
-PROXY_TARGET=https://apm-rx.atatus.com uv run main.py
-
-# Via CLI flag:
-uv run main.py --proxy-target http://localhost:8091
+# Set PROXY_TARGET in .env or shell:
+PROXY_TARGET=http://localhost:8091 make run-go
+PROXY_TARGET=http://localhost:8091 make run-python
 ```
 
 ## Flags
 
-| Flag | Default | Purpose |
-|---|---|---|
-| `--host` / `--port` | `0.0.0.0` / `8081` | bind address |
-| `--proxy-target URL` | `PROXY_TARGET` env | proxy target server to forward all requests to |
-| `--log-dir` | `logs/` (root) | where sessions are written |
-| `--status N` | — | force a status on every response (retry testing) |
-| `--delay S` | `0` | stall S seconds before responding (timeout testing) |
-| `--max-body N` | unlimited | truncate text bodies to N chars |
-| `--summary` | off | also print a per-span summary of trace payloads |
+| Python Flag | Go Flag | Default | Purpose |
+|---|---|---|---|
+| `--host` | `-host` | `0.0.0.0` | bind address |
+| `--port` | `-port` | `8081` | bind port |
+| `--proxy-target URL` | `-proxy-target URL` | `PROXY_TARGET` env | proxy target server to forward all requests to |
+| `--log-dir` | `-log-dir` | `logs/` (root) | where sessions are written |
+| `--status N` | `-status N` | — | force a status on every response |
+| `--delay S` | `-delay S` | `0` | stall S seconds before responding |
+| `--max-body N` | `-max-body N` | unlimited | truncate text bodies to N chars |
 
-## Docker & Docker Compose
-
-### Using Makefile
+## Makefile & Docker Compose Commands
 
 ```bash
-make help           # Show available make targets
-make run-python     # Run python service locally
-make up             # Start via Docker Compose
-make down           # Stop Docker Compose
-make logs           # View Docker Compose logs
-```
-
-### Using Docker Compose Directly
-
-```bash
-# Start container with logs volume mounted to ./logs
-docker compose up -d
-
-# Stop container
-docker compose down
-```
-
-### Manual Docker Build
-
-```bash
-# Build the Docker image from src/python
-cd src/python
-docker build -f Dockerfile.python -t logreq-python:latest .
-
-# Run in Mock Mode
-docker run -p 8081:8081 -v $(pwd)/../../logs:/logs logreq-python:latest
-
-# Run in Proxy Mode via environment variable
-docker run -p 8081:8081 -e PROXY_TARGET="http://host.docker.internal:8091" logreq-python:latest
+make help           # Show all available commands
+make run-go         # Run Go service locally
+make run-python     # Run Python service locally
+make build-all      # Build Docker images for all languages
+make up             # Start Python & Go containers via Docker Compose
+make down           # Stop Docker Compose containers
+make logs           # View live container logs
 ```
 
 ## Notes
