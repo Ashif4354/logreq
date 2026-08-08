@@ -1,4 +1,4 @@
-.PHONY: help run-python run-go run-js build-python build-go build-js build-all up down logs clean
+.PHONY: help run-python run-go run-js build-python build-go build-js build-all up down logs clean clean-logs
 
 # Default target
 help:
@@ -13,7 +13,8 @@ help:
 	@echo "  make up             Start all services with Docker Compose"
 	@echo "  make down           Stop Docker Compose containers"
 	@echo "  make logs           View Docker Compose logs"
-	@echo "  make clean          Clean python cache and temporary test files"
+	@echo "  make clean-logs     Clean log files without needing sudo"
+	@echo "  make clean          Clean python cache, log files and temporary test files"
 
 # Local execution
 run-python:
@@ -39,7 +40,8 @@ build-all: build-python build-go build-js
 
 # Docker Compose targets
 up:
-	docker compose up -d --build
+	mkdir -p logs
+	UID=$$(id -u) GID=$$(id -g) docker compose up -d --build
 
 down:
 	docker compose down
@@ -47,6 +49,9 @@ down:
 logs:
 	docker compose logs -f
 
-clean:
+clean-logs:
+	find logs -mindepth 1 ! -name '.gitkeep' -exec rm -rf {} +
+
+clean: clean-logs
 	find . -type d -name "__pycache__" -exec rm -rf {} +
 	find . -type f -name "*.pyc" -delete

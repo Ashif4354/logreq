@@ -4,6 +4,7 @@ services:
       context: ./src/python
       dockerfile: Dockerfile.python
     container_name: logreq-python
+    user: "${UID:-1000}:${GID:-1000}"
     ports:
       - "8081:8081"
     environment:
@@ -20,6 +21,7 @@ services:
       context: ./src/go
       dockerfile: Dockerfile.golang
     container_name: logreq-go
+    user: "${UID:-1000}:${GID:-1000}"
     ports:
       - "8082:8081"
     environment:
@@ -36,6 +38,7 @@ services:
       context: ./src/js
       dockerfile: Dockerfile.javascript
     container_name: logreq-js
+    user: "${UID:-1000}:${GID:-1000}"
     ports:
       - "8083:8081"
     environment:

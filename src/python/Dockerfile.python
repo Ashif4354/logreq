@@ -8,6 +8,8 @@ WORKDIR /app
 # Enable bytecode compilation and unbuffered logging
 ENV UV_COMPILE_BYTECODE=1
 ENV PYTHONUNBUFFERED=1
+ENV HOME=/tmp
+ENV UV_CACHE_DIR=/tmp/uv-cache
 
 # Copy dependency manifest
 COPY pyproject.toml .

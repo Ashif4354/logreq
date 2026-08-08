@@ -10,7 +10,8 @@ wheels/
 .venv
 
 # Captured requests — contain auth headers and prompt content
-logs/
+logs/*
+!logs/.gitkeep
 
 # Environment variables
 .env
