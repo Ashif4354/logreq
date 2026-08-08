@@ -18,7 +18,7 @@ services:
   logreq-go:
     build:
       context: ./src/go
-      dockerfile: Dockerfile.go
+      dockerfile: Dockerfile.golang
     container_name: logreq-go
     ports:
       - "8082:8081"
@@ -26,6 +26,22 @@ services:
       - PROXY_TARGET=${PROXY_TARGET:-}
     env_file:
       - path: ./src/go/.env
+        required: false
+    volumes:
+      - ./logs:/logs
+    restart: unless-stopped
+
+  logreq-js:
+    build:
+      context: ./src/js
+      dockerfile: Dockerfile.javascript
+    container_name: logreq-js
+    ports:
+      - "8083:8081"
+    environment:
+      - PROXY_TARGET=${PROXY_TARGET:-}
+    env_file:
+      - path: ./src/js/.env
         required: false
     volumes:
       - ./logs:/logs

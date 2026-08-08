@@ -1,0 +1,12 @@
+{
+  "name": "logreq-js",
+  "version": "0.1.0",
+  "description": "logreq Node.js implementation",
+  "main": "main.js",
+  "scripts": {
+    "start": "node main.js"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

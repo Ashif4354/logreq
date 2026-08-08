@@ -12,16 +12,21 @@ no real server in the loop.
 logreq/
 ├── logs/                         # Shared root log directory
 │   ├── 2026-08-08_17-42-06-python/
-│   └── 2026-08-08_17-49-33-go/
+│   ├── 2026-08-08_17-49-33-go/
+│   └── 2026-08-08_17-54-12-js/
 ├── src/
 │   ├── python/                   # Python implementation (FastAPI / Uvicorn)
 │   │   ├── Dockerfile.python
 │   │   ├── main.py
 │   │   └── pyproject.toml
-│   └── go/                       # Go implementation (net/http stdlib)
-│       ├── Dockerfile.go
-│       ├── main.go
-│       └── go.mod
+│   ├── go/                       # Go implementation (net/http stdlib)
+│   │   ├── Dockerfile.golang
+│   │   ├── main.go
+│   │   └── go.mod
+│   └── js/                       # Node.js implementation (http stdlib)
+│       ├── Dockerfile.javascript
+│       ├── main.js
+│       └── package.json
 ├── docker-compose.yml            # Multi-service docker orchestration
 ├── Makefile                      # Unified developer CLI
 └── README.md
@@ -37,6 +42,16 @@ cd src/go && go run main.go
 
 # Or via Makefile from root
 make run-go
+```
+
+### Node.js / JavaScript Implementation
+
+```bash
+# Run locally using Node.js
+cd src/js && node main.js
+
+# Or via Makefile from root
+make run-js
 ```
 
 ### Python Implementation
@@ -65,13 +80,14 @@ preview, and any decode failure is recorded on the request instead of raising.
 
 ```
 logs/
-  2026-08-08_17-49-33-go/
+  2026-08-08_17-54-12-js/
     index.jsonl                    # one line per request, greppable
     00001_POST_v1_traces.json      # full record, sequence-ordered
     00002_GET_health.json
+  2026-08-08_17-49-33-go/
+    index.jsonl
   2026-08-08_17-42-06-python/
     index.jsonl
-    00001_POST_v1_traces.json
 ```
 
 ## Proxy Mode
@@ -84,30 +100,32 @@ To enable **Proxy Mode**, set `PROXY_TARGET` in `.env` or as an environment vari
 
 ```bash
 # Set PROXY_TARGET in .env or shell:
+PROXY_TARGET=http://localhost:8091 make run-js
 PROXY_TARGET=http://localhost:8091 make run-go
 PROXY_TARGET=http://localhost:8091 make run-python
 ```
 
 ## Flags
 
-| Python Flag | Go Flag | Default | Purpose |
-|---|---|---|---|
-| `--host` | `-host` | `0.0.0.0` | bind address |
-| `--port` | `-port` | `8081` | bind port |
-| `--proxy-target URL` | `-proxy-target URL` | `PROXY_TARGET` env | proxy target server to forward all requests to |
-| `--log-dir` | `-log-dir` | `logs/` (root) | where sessions are written |
-| `--status N` | `-status N` | — | force a status on every response |
-| `--delay S` | `-delay S` | `0` | stall S seconds before responding |
-| `--max-body N` | `-max-body N` | unlimited | truncate text bodies to N chars |
+| Python Flag | Go Flag | JS Flag | Default | Purpose |
+|---|---|---|---|---|
+| `--host` | `-host` | `--host` | `0.0.0.0` | bind address |
+| `--port` | `-port` | `--port` | `8081` | bind port |
+| `--proxy-target URL` | `-proxy-target URL` | `--proxy-target URL` | `PROXY_TARGET` env | proxy target server to forward all requests to |
+| `--log-dir` | `-log-dir` | `--log-dir` | `logs/` (root) | where sessions are written |
+| `--status N` | `-status N` | `--status N` | — | force a status on every response |
+| `--delay S` | `-delay S` | `--delay S` | `0` | stall S seconds before responding |
+| `--max-body N` | `-max-body N` | `--max-body N` | unlimited | truncate text bodies to N chars |
 
 ## Makefile & Docker Compose Commands
 
 ```bash
 make help           # Show all available commands
+make run-js         # Run Node.js service locally
 make run-go         # Run Go service locally
 make run-python     # Run Python service locally
 make build-all      # Build Docker images for all languages
-make up             # Start Python & Go containers via Docker Compose
+make up             # Start Python, Go, and JS containers via Docker Compose
 make down           # Stop Docker Compose containers
 make logs           # View live container logs
 ```
