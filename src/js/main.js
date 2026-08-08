@@ -3,7 +3,16 @@ const https = require('https');
 const fs = require('fs');
 const path = require('path');
 const zlib = require('zlib');
+const util = require('util');
 const { URL } = require('url');
+
+const gunzipAsync = util.promisify(zlib.gunzip);
+const inflateAsync = util.promisify(zlib.inflate);
+const inflateRawAsync = util.promisify(zlib.inflateRaw);
+
+// Reusable connection-pooled HTTP/HTTPS agents for ultra-high proxy throughput
+const httpAgent = new http.Agent({ keepAlive: true, maxSockets: 500, keepAliveMsecs: 10000 });
+const httpsAgent = new https.Agent({ keepAlive: true, maxSockets: 500, keepAliveMsecs: 10000 });
 
 // --------------------------------------------------------------------------
 // .env loader
@@ -101,20 +110,23 @@ function otlpSignal(reqPath) {
   return null;
 }
 
-function decompressBody(raw, encoding) {
+async function decompressBody(raw, encoding) {
   const enc = (encoding || '').trim().toLowerCase();
   if (!raw || !raw.length || !enc || enc === 'identity') {
     return { body: raw, error: null };
   }
   try {
     if (enc === 'gzip') {
-      return { body: zlib.gunzipSync(raw), error: null };
+      const body = await gunzipAsync(raw);
+      return { body, error: null };
     }
     if (enc === 'deflate') {
       try {
-        return { body: zlib.inflateSync(raw), error: null };
+        const body = await inflateAsync(raw);
+        return { body, error: null };
       } catch (e) {
-        return { body: zlib.inflateRawSync(raw), error: null };
+        const body = await inflateRawAsync(raw);
+        return { body, error: null };
       }
     }
   } catch (err) {
@@ -173,19 +185,24 @@ function safeName(reqPath) {
   return keep.slice(0, 80);
 }
 
-function writeRecord(record, filename) {
-  fs.writeFileSync(path.join(sessionDir, filename), JSON.stringify(record, null, 2), 'utf8');
-  
-  const indexLine = {
-    seq: record.seq,
-    ts: record.timestamp,
-    method: record.method,
-    path: record.path,
-    status: record.response_status,
-    bytes: record.body_bytes,
-    file: filename
-  };
-  fs.appendFileSync(indexPath, JSON.stringify(indexLine) + '\n', 'utf8');
+// Asynchronous non-blocking file writer
+async function writeRecord(record, filename) {
+  try {
+    await fs.promises.writeFile(path.join(sessionDir, filename), JSON.stringify(record, null, 2), 'utf8');
+    
+    const indexLine = {
+      seq: record.seq,
+      ts: record.timestamp,
+      method: record.method,
+      path: record.path,
+      status: record.response_status,
+      bytes: record.body_bytes,
+      file: filename
+    };
+    await fs.promises.appendFile(indexPath, JSON.stringify(indexLine) + '\n', 'utf8');
+  } catch (err) {
+    console.error(`[LOG ERROR] Failed to write log record: ${err.message}`);
+  }
 }
 
 // --------------------------------------------------------------------------
@@ -201,7 +218,7 @@ const server = http.createServer((req, res) => {
     const reqUrl = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
     const fullPath = reqUrl.pathname.replace(/^\/+/, '');
     
-    const { body, error: decodeError } = decompressBody(raw, req.headers['content-encoding']);
+    const { body, error: decodeError } = await decompressBody(raw, req.headers['content-encoding']);
     const contentType = req.headers['content-type'] || '';
     let { parsed, format: bodyFormat } = parseBody(body, contentType);
 
@@ -245,13 +262,17 @@ const server = http.createServer((req, res) => {
       delete fwdHeaders['transfer-encoding'];
       delete fwdHeaders.connection;
 
+      const isHttps = targetUrl.startsWith('https:');
+      const clientModule = isHttps ? https : http;
+      const targetAgent = isHttps ? httpsAgent : httpAgent;
+
       const startTime = process.hrtime.bigint();
       try {
         const result = await new Promise((resolve, reject) => {
-          const clientModule = targetUrl.startsWith('https:') ? https : http;
           const proxyReq = clientModule.request(targetUrl, {
             method: req.method,
             headers: fwdHeaders,
+            agent: targetAgent,
             timeout: 60000
           }, (proxyRes) => {
             const respChunks = [];
@@ -324,6 +345,8 @@ const server = http.createServer((req, res) => {
     }
 
     const filename = `${String(currentSeq).padStart(5, '0')}_${req.method}_${safeName(fullPath)}.json`;
+    
+    // Non-blocking background log write
     writeRecord(record, filename);
 
     if (isProxy) {

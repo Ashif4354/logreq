@@ -16,6 +16,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -33,10 +34,23 @@ type State struct {
 	SessionDir string
 	IndexPath  string
 	Seq        int64
-	Lock       sync.Mutex
+	IndexMutex sync.Mutex
 }
 
 var state State
+
+// Shared HTTP Client with connection pooling for ultra-high throughput
+var sharedHTTPClient = &http.Client{
+	Timeout: 60 * time.Second,
+	Transport: &http.Transport{
+		MaxIdleConns:        1000,
+		MaxIdleConnsPerHost: 200,
+		IdleConnTimeout:     90 * time.Second,
+	},
+	CheckRedirect: func(req *http.Request, via []*http.Request) error {
+		return http.ErrUseLastResponse
+	},
+}
 
 func loadDotEnv(path string) {
 	data, err := os.ReadFile(path)
@@ -64,7 +78,6 @@ func loadDotEnv(path string) {
 func main() {
 	loadDotEnv(".env")
 
-	// Determine default root log directory (../../logs relative to src/go or ./logs)
 	execPath, err := os.Executable()
 	var defaultLogDir string
 	if err == nil {
@@ -265,10 +278,8 @@ func catchAllHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	state.Lock.Lock()
-	state.Seq++
-	seq := state.Seq
-	state.Lock.Unlock()
+	// Atomic lock-free sequence increment
+	seq := atomic.AddInt64(&state.Seq, 1)
 
 	signal := otlpSignal(r.URL.Path)
 
@@ -326,15 +337,8 @@ func catchAllHandler(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 
-			client := &http.Client{
-				Timeout: 60 * time.Second,
-				CheckRedirect: func(req *http.Request, via []*http.Request) error {
-					return http.ErrUseLastResponse
-				},
-			}
-
 			startTime := time.Now()
-			resp, err := client.Do(outReq)
+			resp, err := sharedHTTPClient.Do(outReq)
 			elapsedMs = float64(time.Since(startTime).Microseconds()) / 1000.0
 
 			if err != nil {
@@ -388,7 +392,9 @@ func catchAllHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	filename := fmt.Sprintf("%05d_%s_%s.json", seq, r.Method, safeName(r.URL.Path))
-	writeRecord(record, filename)
+	
+	// Non-blocking concurrent disk write in background goroutine
+	go writeRecord(record, filename)
 
 	if isProxy {
 		fmt.Printf("#%05d %s %s <- %s %dB %s => %s -> %d (%.1fms)\n", seq, r.Method, r.URL.Path, r.RemoteAddr, len(raw), bodyFormat, proxyTargetURL, status, elapsedMs)
@@ -481,6 +487,10 @@ func writeRecord(record map[string]interface{}, filename string) {
 		"file":   filename,
 	}
 	indexData, _ := json.Marshal(indexLine)
+
+	state.IndexMutex.Lock()
+	defer state.IndexMutex.Unlock()
+
 	f, err := os.OpenFile(state.IndexPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err == nil {
 		defer f.Close()

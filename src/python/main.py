@@ -108,10 +108,21 @@ class State:
     index_path: Path = Path(".")
     seq: int = 0
     lock: asyncio.Lock = field(default_factory=asyncio.Lock)
+    http_client: httpx.AsyncClient | None = None
 
 
 state = State()
 app = FastAPI(title="logreq", docs_url=None, redoc_url=None, openapi_url=None)
+
+
+def get_http_client() -> httpx.AsyncClient:
+    if state.http_client is None:
+        state.http_client = httpx.AsyncClient(
+            timeout=httpx.Timeout(60.0),
+            follow_redirects=False,
+            limits=httpx.Limits(max_keepalive_connections=200, max_connections=1000),
+        )
+    return state.http_client
 
 # browser-based clients need preflight to pass before they'll POST anything
 app.add_middleware(
@@ -387,32 +398,32 @@ async def catch_all(full_path: str, request: Request) -> Response:
 
         start_time = time.perf_counter()
         try:
-            async with httpx.AsyncClient(timeout=60.0, follow_redirects=False) as client:
-                upstream_res = await client.request(
-                    method=request.method,
-                    url=target_url,
-                    headers=fwd_headers,
-                    content=raw,
-                )
-                elapsed_ms = (time.perf_counter() - start_time) * 1000
-                status = state.config.status or upstream_res.status_code
+            client = get_http_client()
+            upstream_res = await client.request(
+                method=request.method,
+                url=target_url,
+                headers=fwd_headers,
+                content=raw,
+            )
+            elapsed_ms = (time.perf_counter() - start_time) * 1000
+            status = state.config.status or upstream_res.status_code
 
-                # Prepare response headers (filter hop-by-hop & content-encoding if httpx decoded)
-                resp_headers = {}
-                for k, v in upstream_res.headers.items():
-                    if k.lower() not in (
-                        "content-encoding",
-                        "content-length",
-                        "transfer-encoding",
-                        "connection",
-                    ):
-                        resp_headers[k] = v
+            # Prepare response headers (filter hop-by-hop & content-encoding if httpx decoded)
+            resp_headers = {}
+            for k, v in upstream_res.headers.items():
+                if k.lower() not in (
+                    "content-encoding",
+                    "content-length",
+                    "transfer-encoding",
+                    "connection",
+                ):
+                    resp_headers[k] = v
 
-                proxy_response = Response(
-                    content=upstream_res.content,
-                    status_code=status,
-                    headers=resp_headers,
-                )
+            proxy_response = Response(
+                content=upstream_res.content,
+                status_code=status,
+                headers=resp_headers,
+            )
         except Exception as exc:
             elapsed_ms = (time.perf_counter() - start_time) * 1000
             proxy_error = f"Proxy forwarding error: {exc}"
@@ -452,7 +463,7 @@ async def catch_all(full_path: str, request: Request) -> Response:
             record["proxy_error"] = proxy_error
 
     filename = f"{seq:05d}_{request.method}_{safe_name(full_path)}.json"
-    await asyncio.to_thread(write_record, record, filename)
+    asyncio.create_task(asyncio.to_thread(write_record, record, filename))
 
     if proxy_target:
         line = (
