@@ -11,3 +11,7 @@ wheels/
 
 # Captured requests — contain auth headers and prompt content
 logs/
+
+# Environment variables
+.env
+

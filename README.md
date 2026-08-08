@@ -66,19 +66,57 @@ the console — service, span names, and which attribute conventions the client 
 using. Prompt, completion, input and output attributes are omitted from that view;
 they're huge and often sensitive.
 
+## Proxy Mode
+
+`logreq` can operate in two modes:
+1. **Mock Mode (Default)**: Logs incoming requests and returns protocol-correct mock responses.
+2. **Proxy Mode**: Forwards incoming requests to a target server, logs both request and response details, and returns the target's exact response back to the client.
+
+To enable **Proxy Mode**, set `PROXY_TARGET` in `.env` or as an environment variable, or pass `--proxy-target`:
+
+```bash
+# Via .env file:
+# Create .env and set: PROXY_TARGET=http://localhost:8091
+uv run main.py
+
+# Via environment variable:
+PROXY_TARGET=https://apm-rx.atatus.com uv run main.py
+
+# Via CLI flag:
+uv run main.py --proxy-target http://localhost:8091
+```
+
 ## Flags
 
 | Flag | Default | Purpose |
 |---|---|---|
 | `--host` / `--port` | `0.0.0.0` / `8081` | bind address |
+| `--proxy-target URL` | `PROXY_TARGET` env | proxy target server to forward all requests to |
 | `--log-dir` | `logs` | where sessions are written |
 | `--status N` | — | force a status on every response (retry testing) |
 | `--delay S` | `0` | stall S seconds before responding (timeout testing) |
 | `--max-body N` | unlimited | truncate text bodies to N chars |
 | `--summary` | off | also print a per-span summary of trace payloads |
 
+## Docker
+
+Build and run using `Dockerfile.python`:
+
+```bash
+# Build the Docker image
+docker build -f Dockerfile.python -t logreq:latest .
+
+# Run in Mock Mode
+docker run -p 8081:8081 logreq:latest
+
+# Run in Proxy Mode via environment variable
+docker run -p 8081:8081 -e PROXY_TARGET="http://host.docker.internal:8091" logreq:latest
+```
+
 ## Notes
 
 - Bodies are held in memory before writing; not built for firehose volumes.
 - Everything is captured verbatim, including auth headers and request content. Treat
   `logs/` as sensitive — it's gitignored by default.
+
+

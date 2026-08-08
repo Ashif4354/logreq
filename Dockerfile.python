@@ -1,0 +1,25 @@
+FROM python:3.14-slim
+
+# Copy uv binary from official astral-sh uv image
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
+
+WORKDIR /app
+
+# Enable bytecode compilation and unbuffered logging
+ENV UV_COMPILE_BYTECODE=1
+ENV PYTHONUNBUFFERED=1
+
+# Copy dependency manifest
+COPY pyproject.toml .
+
+# Install project dependencies
+RUN uv sync --no-cache
+
+# Copy application source code
+COPY main.py README.md .env.example ./
+
+# Expose default port
+EXPOSE 8081
+
+# Run logreq server
+ENTRYPOINT ["uv", "run", "main.py", "--host", "0.0.0.0", "--port", "8081"]

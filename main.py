@@ -25,15 +25,21 @@ import base64
 import binascii
 import gzip
 import json
+import os
+import time
 import zlib
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from dotenv import load_dotenv
+import httpx
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, Response
+
+load_dotenv()
 
 # --------------------------------------------------------------------------
 # optional decoders — everything degrades gracefully when they're missing
@@ -89,6 +95,7 @@ class Config:
     delay: float = 0.0
     summarize: bool = False
     max_body: int = 0  # 0 = unlimited
+    proxy_target: str | None = None
 
 
 @dataclass
@@ -360,7 +367,62 @@ async def catch_all(full_path: str, request: Request) -> Response:
         seq = state.seq
 
     signal = otlp_signal(full_path)
-    status = state.config.status or 200
+    proxy_target = state.config.proxy_target
+    proxy_response: Response | None = None
+    proxy_error: str | None = None
+    target_url: str | None = None
+    elapsed_ms: float = 0.0
+
+    if proxy_target:
+        path_part = "/" + full_path.lstrip("/")
+        query_part = f"?{request.url.query}" if request.url.query else ""
+        target_url = f"{proxy_target}{path_part}{query_part}"
+
+        # Prepare headers to forward (strip hop-by-hop headers)
+        fwd_headers = dict(request.headers)
+        for h in ("host", "content-length", "transfer-encoding", "connection"):
+            fwd_headers.pop(h, None)
+
+        start_time = time.perf_counter()
+        try:
+            async with httpx.AsyncClient(timeout=60.0, follow_redirects=False) as client:
+                upstream_res = await client.request(
+                    method=request.method,
+                    url=target_url,
+                    headers=fwd_headers,
+                    content=raw,
+                )
+                elapsed_ms = (time.perf_counter() - start_time) * 1000
+                status = state.config.status or upstream_res.status_code
+
+                # Prepare response headers (filter hop-by-hop & content-encoding if httpx decoded)
+                resp_headers = {}
+                for k, v in upstream_res.headers.items():
+                    if k.lower() not in (
+                        "content-encoding",
+                        "content-length",
+                        "transfer-encoding",
+                        "connection",
+                    ):
+                        resp_headers[k] = v
+
+                proxy_response = Response(
+                    content=upstream_res.content,
+                    status_code=status,
+                    headers=resp_headers,
+                )
+        except Exception as exc:
+            elapsed_ms = (time.perf_counter() - start_time) * 1000
+            proxy_error = f"Proxy forwarding error: {exc}"
+            status = state.config.status or 502
+            err_body = json.dumps({"error": "Bad Gateway", "detail": str(exc)}).encode("utf-8")
+            proxy_response = Response(
+                content=err_body,
+                status_code=status,
+                headers={"content-type": "application/json"},
+            )
+    else:
+        status = state.config.status or 200
 
     record = {
         "seq": seq,
@@ -381,16 +443,31 @@ async def catch_all(full_path: str, request: Request) -> Response:
         "response_status": status,
     }
 
+    if proxy_target:
+        record["proxy_target"] = target_url
+        record["upstream_latency_ms"] = round(elapsed_ms, 2)
+        if proxy_error:
+            record["proxy_error"] = proxy_error
+
     filename = f"{seq:05d}_{request.method}_{safe_name(full_path)}.json"
     await asyncio.to_thread(write_record, record, filename)
 
-    line = (
-        f"#{seq:05d} {request.method} /{full_path} "
-        f"<- {record['client']} {len(raw)}B {body_format} -> {status}"
-    )
+    if proxy_target:
+        line = (
+            f"#{seq:05d} {request.method} /{full_path} "
+            f"<- {record['client']} {len(raw)}B {body_format} => {target_url} -> {status} ({elapsed_ms:.1f}ms)"
+        )
+    else:
+        line = (
+            f"#{seq:05d} {request.method} /{full_path} "
+            f"<- {record['client']} {len(raw)}B {body_format} -> {status}"
+        )
+
     print(line, flush=True)
     if decode_error:
         print(f"  ! {decode_error}", flush=True)
+    if proxy_error:
+        print(f"  ! {proxy_error}", flush=True)
     if state.config.summarize and signal == "traces":
         for summary_line in summarize_traces(parsed):
             print(summary_line, flush=True)
@@ -398,6 +475,8 @@ async def catch_all(full_path: str, request: Request) -> Response:
     if state.config.delay:
         await asyncio.sleep(state.config.delay)
 
+    if proxy_response is not None:
+        return proxy_response
     return build_response(request, signal, content_type, status, record)
 
 
@@ -443,7 +522,7 @@ def start_session(config: Config) -> None:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="fake backend that logs every request")
+    parser = argparse.ArgumentParser(description="fake backend / proxy that logs every request")
     parser.add_argument("--host", default="0.0.0.0")
     parser.add_argument("--port", type=int, default=8081)
     parser.add_argument("--log-dir", default="logs", type=Path)
@@ -453,7 +532,14 @@ def main() -> None:
         "--summary", action="store_true", help="also print a per-span trace summary"
     )
     parser.add_argument("--max-body", type=int, default=0, help="truncate text bodies")
+    parser.add_argument(
+        "--proxy-target",
+        help="target server URL to proxy and forward requests to (overrides PROXY_TARGET env var)",
+    )
     args = parser.parse_args()
+
+    raw_proxy = args.proxy_target or os.getenv("PROXY_TARGET")
+    proxy_target = raw_proxy.strip().rstrip("/") if raw_proxy and raw_proxy.strip() else None
 
     start_session(
         Config(
@@ -462,10 +548,15 @@ def main() -> None:
             delay=args.delay,
             summarize=args.summary,
             max_body=args.max_body,
+            proxy_target=proxy_target,
         )
     )
 
-    print(f"logreq session {state.session} -> {state.session_dir}", flush=True)
+    if proxy_target:
+        print(f"logreq session {state.session} -> {state.session_dir} [PROXY MODE -> {proxy_target}]", flush=True)
+    else:
+        print(f"logreq session {state.session} -> {state.session_dir} [MOCK MODE]", flush=True)
+
     if not OTLP_PROTO:
         print("note: no protobuf schemas installed, protobuf bodies stay base64", flush=True)
 
