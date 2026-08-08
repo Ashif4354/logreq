@@ -6,7 +6,7 @@ WORKDIR /app
 COPY package.json ./
 
 # Copy Node.js application source
-COPY main.js .env.example ./
+COPY main.js ./
 
 # Expose default port
 EXPOSE 8081

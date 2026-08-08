@@ -43,7 +43,6 @@ import re
 from datetime import datetime, timezone, timedelta
 
 load_dotenv()
-load_dotenv(Path(__file__).resolve().parent.parent.parent / ".env")
 
 
 def get_configured_timezone() -> tuple[timezone, str]:

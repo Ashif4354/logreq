@@ -44,7 +44,6 @@ function loadDotEnv(envPath) {
 
 loadDotEnv(path.join(__dirname, '.env'));
 loadDotEnv(path.join(process.cwd(), '.env'));
-loadDotEnv(path.join(__dirname, '../../.env'));
 
 function getNowTimezone() {
   const tzEnv = (process.env.TIMEZONE || '').trim();

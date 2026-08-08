@@ -11,7 +11,7 @@ services:
       - PROXY_TARGET=${PROXY_TARGET:-}
       - TIMEZONE=${TIMEZONE:-}
     env_file:
-      - path: ./src/python/.env
+      - path: .env
         required: false
     volumes:
       - ./logs:/logs
@@ -29,7 +29,7 @@ services:
       - PROXY_TARGET=${PROXY_TARGET:-}
       - TIMEZONE=${TIMEZONE:-}
     env_file:
-      - path: ./src/go/.env
+      - path: .env
         required: false
     volumes:
       - ./logs:/logs
@@ -47,7 +47,7 @@ services:
       - PROXY_TARGET=${PROXY_TARGET:-}
       - TIMEZONE=${TIMEZONE:-}
     env_file:
-      - path: ./src/js/.env
+      - path: .env
         required: false
     volumes:
       - ./logs:/logs

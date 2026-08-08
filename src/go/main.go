@@ -78,7 +78,6 @@ func loadDotEnv(path string) {
 
 func main() {
 	loadDotEnv(".env")
-	loadDotEnv("../../.env")
 
 	execPath, err := os.Executable()
 	var defaultLogDir string
