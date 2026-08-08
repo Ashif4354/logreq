@@ -14,6 +14,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -77,6 +78,7 @@ func loadDotEnv(path string) {
 
 func main() {
 	loadDotEnv(".env")
+	loadDotEnv("../../.env")
 
 	execPath, err := os.Executable()
 	var defaultLogDir string
@@ -132,8 +134,52 @@ func main() {
 	}
 }
 
+var tzRegex = regexp.MustCompile(`^([+-])(\d{1,2}):(\d{2})$`)
+
+func parseTimezoneEnv() time.Time {
+	tzStr := strings.TrimSpace(os.Getenv("TIMEZONE"))
+	matches := tzRegex.FindStringSubmatch(tzStr)
+	if matches == nil {
+		return time.Now().UTC()
+	}
+
+	signStr := matches[1]
+	var hours, mins int
+	fmt.Sscanf(matches[2], "%d", &hours)
+	fmt.Sscanf(matches[3], "%d", &mins)
+
+	if hours < 0 || hours > 23 || mins < 0 || mins > 59 {
+		return time.Now().UTC()
+	}
+
+	sign := 1
+	if signStr == "-" {
+		sign = -1
+	}
+
+	totalMinutes := sign * (hours*60 + mins)
+	normSign := "+"
+	if totalMinutes < 0 {
+		normSign = "-"
+	}
+	absMins := totalMinutes
+	if absMins < 0 {
+		absMins = -absMins
+	}
+	normH := absMins / 60
+	normM := absMins % 60
+	normStr := fmt.Sprintf("%s%02d:%02d", normSign, normH, normM)
+
+	loc := time.FixedZone(normStr, totalMinutes*60)
+	return time.Now().In(loc)
+}
+
+func getNow() time.Time {
+	return parseTimezoneEnv()
+}
+
 func startSession() {
-	state.Session = time.Now().Format("2006-01-02_15-04-05") + "-go"
+	state.Session = getNow().Format("2006-01-02_15-04-05") + "-go"
 	state.SessionDir = filepath.Join(state.Config.LogDir, state.Session)
 	os.MkdirAll(state.SessionDir, 0755)
 	state.IndexPath = filepath.Join(state.SessionDir, "index.jsonl")
@@ -262,7 +308,7 @@ func safeName(path string) string {
 }
 
 func catchAllHandler(w http.ResponseWriter, r *http.Request) {
-	received := time.Now().UTC()
+	received := getNow()
 	raw, err := io.ReadAll(r.Body)
 	if err != nil {
 		raw = []byte{}

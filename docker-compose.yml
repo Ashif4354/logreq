@@ -9,6 +9,7 @@ services:
       - "8081:8081"
     environment:
       - PROXY_TARGET=${PROXY_TARGET:-}
+      - TIMEZONE=${TIMEZONE:-}
     env_file:
       - path: ./src/python/.env
         required: false
@@ -26,6 +27,7 @@ services:
       - "8082:8081"
     environment:
       - PROXY_TARGET=${PROXY_TARGET:-}
+      - TIMEZONE=${TIMEZONE:-}
     env_file:
       - path: ./src/go/.env
         required: false
@@ -43,6 +45,7 @@ services:
       - "8083:8081"
     environment:
       - PROXY_TARGET=${PROXY_TARGET:-}
+      - TIMEZONE=${TIMEZONE:-}
     env_file:
       - path: ./src/js/.env
         required: false

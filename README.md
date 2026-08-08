@@ -105,13 +105,31 @@ PROXY_TARGET=http://localhost:8091 make run-go
 PROXY_TARGET=http://localhost:8091 make run-python
 ```
 
-## Flags
+## Timezone Configuration
 
-| Python Flag | Go Flag | JS Flag | Default | Purpose |
+`logreq` supports configuring the timezone used for session directory names (e.g. `2026-08-08_19-50-07-python`) and log record timestamps (`timestamp`) via the `TIMEZONE` environment variable.
+
+### Format & Validation
+- **Allowed Format**: Must start with `+` or `-`, followed by 1 or 2 hour digits, `:`, and 2 minute digits (`+[H]H:MM` or `-[H]H:MM`).
+  - Examples: `+5:30`, `+05:30`, `-02:00`, `-05:30`, `-5:30`.
+  - Single digit hours (e.g., `+5:30`) are normalized automatically to double digit format (`+05:30`).
+- **Default Behavior**: Defaults to **UTC** (`+00:00`) if `TIMEZONE` is unset or empty.
+- **Rejection of Invalid Formats**: Any non-matching string (e.g. `+-5:30`, `A-04:30`, `5:30`) is strictly rejected and falls back to **UTC** (`+00:00`).
+
+```bash
+# Set in .env or pass in shell:
+TIMEZONE=+5:30 make up
+TIMEZONE=-02:00 make run-go
+```
+
+## Flags & Environment Variables
+
+| Python Flag | Go Flag | JS Flag | Environment Var / Default | Purpose |
 |---|---|---|---|---|
 | `--host` | `-host` | `--host` | `0.0.0.0` | bind address |
 | `--port` | `-port` | `--port` | `8081` | bind port |
 | `--proxy-target URL` | `-proxy-target URL` | `--proxy-target URL` | `PROXY_TARGET` env | proxy target server to forward all requests to |
+| — | — | — | `TIMEZONE` env (`+00:00` / UTC) | timezone offset for log folders and timestamps |
 | `--log-dir` | `-log-dir` | `--log-dir` | `logs/` (root) | where sessions are written |
 | `--status N` | `-status N` | `--status N` | — | force a status on every response |
 | `--delay S` | `-delay S` | `--delay S` | `0` | stall S seconds before responding |

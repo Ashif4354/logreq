@@ -44,6 +44,39 @@ function loadDotEnv(envPath) {
 
 loadDotEnv(path.join(__dirname, '.env'));
 loadDotEnv(path.join(process.cwd(), '.env'));
+loadDotEnv(path.join(__dirname, '../../.env'));
+
+function getNowTimezone() {
+  const tzEnv = (process.env.TIMEZONE || '').trim();
+  const match = /^([+-])(\d{1,2}):(\d{2})$/.exec(tzEnv);
+
+  let totalMinutes = 0;
+  let normStr = '+00:00';
+
+  if (match) {
+    const sign = match[1] === '+' ? 1 : -1;
+    const hours = parseInt(match[2], 10);
+    const mins = parseInt(match[3], 10);
+    if (hours >= 0 && hours <= 23 && mins >= 0 && mins <= 59) {
+      totalMinutes = sign * (hours * 60 + mins);
+      const normSign = totalMinutes >= 0 ? '+' : '-';
+      const absMins = Math.abs(totalMinutes);
+      const normH = String(Math.floor(absMins / 60)).padStart(2, '0');
+      const normM = String(absMins % 60).padStart(2, '0');
+      normStr = `${normSign}${normH}:${normM}`;
+    }
+  }
+
+  const nowMs = Date.now();
+  const targetMs = nowMs + (totalMinutes * 60000);
+  const d = new Date(targetMs);
+
+  const pad = (n, len = 2) => String(n).padStart(len, '0');
+  const formattedDir = `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())}_${pad(d.getUTCHours())}-${pad(d.getUTCMinutes())}-${pad(d.getUTCSeconds())}`;
+  const isoString = `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())}T${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}:${pad(d.getUTCSeconds())}.${pad(d.getUTCMilliseconds(), 3)}${normStr}`;
+
+  return { formattedDir, isoString };
+}
 
 // --------------------------------------------------------------------------
 // CLI args parsing
@@ -87,12 +120,7 @@ const config = parseArgs();
 // --------------------------------------------------------------------------
 // Session state
 // --------------------------------------------------------------------------
-function formatDate(d) {
-  const pad = (n) => String(n).padStart(2, '0');
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}_${pad(d.getHours())}-${pad(d.getMinutes())}-${pad(d.getSeconds())}`;
-}
-
-const session = `${formatDate(new Date())}-js`;
+const session = `${getNowTimezone().formattedDir}-js`;
 const sessionDir = path.join(config.logDir, session);
 fs.mkdirSync(sessionDir, { recursive: true });
 const indexPath = path.join(sessionDir, 'index.jsonl');
@@ -209,7 +237,7 @@ async function writeRecord(record, filename) {
 // HTTP Server Handler
 // --------------------------------------------------------------------------
 const server = http.createServer((req, res) => {
-  const received = new Date();
+  const received = getNowTimezone();
   const chunks = [];
 
   req.on('data', chunk => chunks.push(chunk));
@@ -321,7 +349,7 @@ const server = http.createServer((req, res) => {
 
     const record = {
       seq: currentSeq,
-      timestamp: received.toISOString(),
+      timestamp: received.isoString,
       method: req.method,
       url: req.url,
       path: '/' + fullPath,

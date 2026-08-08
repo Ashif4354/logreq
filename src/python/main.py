@@ -39,7 +39,37 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, Response
 
+import re
+from datetime import datetime, timezone, timedelta
+
 load_dotenv()
+load_dotenv(Path(__file__).resolve().parent.parent.parent / ".env")
+
+
+def get_configured_timezone() -> tuple[timezone, str]:
+    tz_env = os.getenv("TIMEZONE", "").strip()
+    match = re.match(r"^([+-])(\d{1,2}):(\d{2})$", tz_env)
+    if match:
+        sign_str, hours_str, mins_str = match.groups()
+        sign = 1 if sign_str == "+" else -1
+        hours, mins = int(hours_str), int(mins_str)
+        if 0 <= hours <= 23 and 0 <= mins <= 59:
+            total_minutes = sign * (hours * 60 + mins)
+
+            norm_sign = "+" if total_minutes >= 0 else "-"
+            abs_mins = abs(total_minutes)
+            norm_h = abs_mins // 60
+            norm_m = abs_mins % 60
+            norm_str = f"{norm_sign}{norm_h:02d}:{norm_m:02d}"
+
+            return timezone(timedelta(minutes=total_minutes)), norm_str
+
+    return timezone.utc, "+00:00"
+
+
+def get_now() -> datetime:
+    tz, _ = get_configured_timezone()
+    return datetime.now(tz)
 
 # --------------------------------------------------------------------------
 # optional decoders — everything degrades gracefully when they're missing
@@ -365,7 +395,7 @@ def write_record(record: dict, filename: str) -> None:
     methods=["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"],
 )
 async def catch_all(full_path: str, request: Request) -> Response:
-    received = datetime.now(timezone.utc)
+    received = get_now()
     raw = await request.body()
 
     body, decode_error = decompress(raw, request.headers.get("content-encoding", ""))
@@ -521,7 +551,7 @@ def build_response(
 
 def start_session(config: Config) -> None:
     state.config = config
-    state.session = datetime.now().strftime("%Y-%m-%d_%H-%M-%S") + "-python"
+    state.session = get_now().strftime("%Y-%m-%d_%H-%M-%S") + "-python"
     state.session_dir = config.log_dir / state.session
     state.session_dir.mkdir(parents=True, exist_ok=True)
     state.index_path = state.session_dir / "index.jsonl"
