@@ -16,7 +16,7 @@ COPY pyproject.toml .
 RUN uv sync --no-cache
 
 # Copy application source code
-COPY main.py README.md .env.example ./
+COPY main.py .env.example ./
 
 # Expose default port
 EXPOSE 8081

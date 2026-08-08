@@ -82,6 +82,8 @@ PROTOBUF_TYPES = ("application/x-protobuf", "application/protobuf")
 # protobuf `bytes` fields decode to base64, which is unreadable for ids
 ID_FIELDS = {"trace_id", "traceId", "span_id", "spanId", "parent_span_id", "parentSpanId"}
 
+ROOT_LOG_DIR = Path(__file__).resolve().parent.parent.parent / "logs"
+
 
 # --------------------------------------------------------------------------
 # state
@@ -90,7 +92,7 @@ ID_FIELDS = {"trace_id", "traceId", "span_id", "spanId", "parent_span_id", "pare
 
 @dataclass
 class Config:
-    log_dir: Path = Path("logs")
+    log_dir: Path = field(default_factory=lambda: ROOT_LOG_DIR)
     status: int | None = None
     delay: float = 0.0
     summarize: bool = False
@@ -508,24 +510,17 @@ def build_response(
 
 def start_session(config: Config) -> None:
     state.config = config
-    state.session = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    state.session = datetime.now().strftime("%Y-%m-%d_%H-%M-%S") + "-python"
     state.session_dir = config.log_dir / state.session
     state.session_dir.mkdir(parents=True, exist_ok=True)
     state.index_path = state.session_dir / "index.jsonl"
-
-    latest = config.log_dir / "latest"
-    latest.unlink(missing_ok=True)
-    try:
-        latest.symlink_to(state.session_dir.resolve(), target_is_directory=True)
-    except OSError:
-        pass
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="fake backend / proxy that logs every request")
     parser.add_argument("--host", default="0.0.0.0")
     parser.add_argument("--port", type=int, default=8081)
-    parser.add_argument("--log-dir", default="logs", type=Path)
+    parser.add_argument("--log-dir", default=ROOT_LOG_DIR, type=Path)
     parser.add_argument("--status", type=int, help="force this status on every response")
     parser.add_argument("--delay", type=float, default=0.0, help="seconds to stall")
     parser.add_argument(

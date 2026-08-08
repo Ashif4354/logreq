@@ -7,6 +7,7 @@ no real server in the loop.
 ## Run
 
 ```bash
+cd src/python
 uv sync                       # add --extra protobuf / --extra compression as needed
 uv run main.py                # http://0.0.0.0:8081
 uv run main.py --port 4318
@@ -36,21 +37,15 @@ mismatched reply as a failure and retry don't hammer you. Everything else is ech
 
 ```
 logs/
-  2026-08-06_07-57-25/
+  2026-08-08_17-42-06-python/
     index.jsonl                    # one line per request, greppable
     00001_POST_v1_traces.json      # full record, sequence-ordered
     00002_GET_health.json
-  latest -> 2026-08-06_07-57-25/   # symlink to the current session
 ```
 
 Each record holds the timestamp, method, full URL, client address, headers, query
 params, decoded body, byte counts, detected body format, any decode error, and the
 status that was returned.
-
-```bash
-jq -r 'select(.path=="/v1/traces") | .file' logs/latest/index.jsonl
-jq '.body' logs/latest/00001_*.json
-```
 
 ## Live console
 
@@ -76,8 +71,8 @@ To enable **Proxy Mode**, set `PROXY_TARGET` in `.env` or as an environment vari
 
 ```bash
 # Via .env file:
-# Create .env and set: PROXY_TARGET=http://localhost:8091
-uv run main.py
+# Set PROXY_TARGET=http://localhost:8091 in src/python/.env
+cd src/python && uv run main.py
 
 # Via environment variable:
 PROXY_TARGET=https://apm-rx.atatus.com uv run main.py
@@ -92,25 +87,46 @@ uv run main.py --proxy-target http://localhost:8091
 |---|---|---|
 | `--host` / `--port` | `0.0.0.0` / `8081` | bind address |
 | `--proxy-target URL` | `PROXY_TARGET` env | proxy target server to forward all requests to |
-| `--log-dir` | `logs` | where sessions are written |
+| `--log-dir` | `logs/` (root) | where sessions are written |
 | `--status N` | — | force a status on every response (retry testing) |
 | `--delay S` | `0` | stall S seconds before responding (timeout testing) |
 | `--max-body N` | unlimited | truncate text bodies to N chars |
 | `--summary` | off | also print a per-span summary of trace payloads |
 
-## Docker
+## Docker & Docker Compose
 
-Build and run using `Dockerfile.python`:
+### Using Makefile
 
 ```bash
-# Build the Docker image
-docker build -f Dockerfile.python -t logreq:latest .
+make help           # Show available make targets
+make run-python     # Run python service locally
+make up             # Start via Docker Compose
+make down           # Stop Docker Compose
+make logs           # View Docker Compose logs
+```
+
+### Using Docker Compose Directly
+
+```bash
+# Start container with logs volume mounted to ./logs
+docker compose up -d
+
+# Stop container
+docker compose down
+```
+
+### Manual Docker Build
+
+```bash
+# Build the Docker image from src/python
+cd src/python
+docker build -f Dockerfile.python -t logreq-python:latest .
 
 # Run in Mock Mode
-docker run -p 8081:8081 logreq:latest
+docker run -p 8081:8081 -v $(pwd)/../../logs:/logs logreq-python:latest
 
 # Run in Proxy Mode via environment variable
-docker run -p 8081:8081 -e PROXY_TARGET="http://host.docker.internal:8091" logreq:latest
+docker run -p 8081:8081 -e PROXY_TARGET="http://host.docker.internal:8091" logreq-python:latest
 ```
 
 ## Notes

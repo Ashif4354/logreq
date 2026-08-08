@@ -1,0 +1,16 @@
+services:
+  logreq-python:
+    build:
+      context: ./src/python
+      dockerfile: Dockerfile.python
+    container_name: logreq-python
+    ports:
+      - "8081:8081"
+    environment:
+      - PROXY_TARGET=${PROXY_TARGET:-}
+    env_file:
+      - path: ./src/python/.env
+        required: false
+    volumes:
+      - ./logs:/logs
+    restart: unless-stopped
