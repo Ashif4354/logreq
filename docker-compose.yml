@@ -1,5 +1,7 @@
 services:
   logreq-python:
+    profiles:
+      - python
     build:
       context: ./src/python
       dockerfile: Dockerfile.python
@@ -18,13 +20,16 @@ services:
     restart: unless-stopped
 
   logreq-go:
+    profiles:
+      - go
+      - golang
     build:
       context: ./src/go
       dockerfile: Dockerfile.golang
     container_name: logreq-go
     user: "${UID:-1000}:${GID:-1000}"
     ports:
-      - "8082:8081"
+      - "8081:8081"
     environment:
       - PROXY_TARGET=${PROXY_TARGET:-}
       - TIMEZONE=${TIMEZONE:-}
@@ -36,13 +41,16 @@ services:
     restart: unless-stopped
 
   logreq-js:
+    profiles:
+      - js
+      - javascript
     build:
       context: ./src/js
       dockerfile: Dockerfile.javascript
     container_name: logreq-js
     user: "${UID:-1000}:${GID:-1000}"
     ports:
-      - "8083:8081"
+      - "8081:8081"
     environment:
       - PROXY_TARGET=${PROXY_TARGET:-}
       - TIMEZONE=${TIMEZONE:-}
@@ -52,3 +60,4 @@ services:
     volumes:
       - ./logs:/logs
     restart: unless-stopped
+

@@ -1,4 +1,4 @@
-.PHONY: help run-python run-go run-js build-python build-go build-js build-all up down logs clean clean-logs
+.PHONY: help run-python run-go run-js build-python build-go build-js build-all up up-python up-go up-js down logs clean clean-logs
 
 # Default target
 help:
@@ -10,7 +10,10 @@ help:
 	@echo "  make build-go       Build logreq Go Docker image"
 	@echo "  make build-js       Build logreq Node.js Docker image"
 	@echo "  make build-all      Build all language Docker images"
-	@echo "  make up             Start all services with Docker Compose"
+	@echo "  make up             Start service with Docker Compose (default: PROFILE=python)"
+	@echo "  make up-python      Start Python service with Docker Compose profile"
+	@echo "  make up-go          Start Go service with Docker Compose profile"
+	@echo "  make up-js          Start Node.js service with Docker Compose profile"
 	@echo "  make down           Stop Docker Compose containers"
 	@echo "  make logs           View Docker Compose logs"
 	@echo "  make clean-logs     Clean log files without needing sudo"
@@ -39,9 +42,23 @@ build-js:
 build-all: build-python build-go build-js
 
 # Docker Compose targets
+PROFILE ?= python
+
 up:
 	mkdir -p logs
-	UID=$$(id -u) GID=$$(id -g) docker compose up -d --build
+	UID=$$(id -u) GID=$$(id -g) docker compose --profile $(PROFILE) up -d --build
+
+up-python:
+	mkdir -p logs
+	UID=$$(id -u) GID=$$(id -g) docker compose --profile python up -d --build
+
+up-go:
+	mkdir -p logs
+	UID=$$(id -u) GID=$$(id -g) docker compose --profile go up -d --build
+
+up-js:
+	mkdir -p logs
+	UID=$$(id -u) GID=$$(id -g) docker compose --profile js up -d --build
 
 down:
 	docker compose down
@@ -55,3 +72,4 @@ clean-logs:
 clean: clean-logs
 	find . -type d -name "__pycache__" -exec rm -rf {} +
 	find . -type f -name "*.pyc" -delete
+

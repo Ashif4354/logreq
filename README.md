@@ -143,7 +143,10 @@ make run-js         # Run Node.js service locally
 make run-go         # Run Go service locally
 make run-python     # Run Python service locally
 make build-all      # Build Docker images for all languages
-make up             # Start Python, Go, and JS containers via Docker Compose
+make up-python      # Start Python service via Docker Compose profile (port 8081)
+make up-go          # Start Go service via Docker Compose profile (port 8081)
+make up-js          # Start Node.js service via Docker Compose profile (port 8081)
+docker compose --profile python up -d  # Direct docker compose profile command
 make down           # Stop Docker Compose containers
 make logs           # View live container logs
 ```
