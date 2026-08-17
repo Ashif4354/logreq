@@ -9,6 +9,8 @@ services:
     user: "${UID:-1000}:${GID:-1000}"
     ports:
       - "8081:8081"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     environment:
       - PROXY_TARGET=${PROXY_TARGET:-}
       - TIMEZONE=${TIMEZONE:-}
@@ -30,6 +32,8 @@ services:
     user: "${UID:-1000}:${GID:-1000}"
     ports:
       - "8081:8081"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     environment:
       - PROXY_TARGET=${PROXY_TARGET:-}
       - TIMEZONE=${TIMEZONE:-}
@@ -51,6 +55,8 @@ services:
     user: "${UID:-1000}:${GID:-1000}"
     ports:
       - "8081:8081"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     environment:
       - PROXY_TARGET=${PROXY_TARGET:-}
       - TIMEZONE=${TIMEZONE:-}
